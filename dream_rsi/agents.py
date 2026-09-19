@@ -69,19 +69,37 @@ def strip_tool_markup(text: str) -> str:
     return out
 
 
-def extract_files(text: str, default_name: Optional[str] = None) -> Dict[str, str]:
-    """Parse the <<<FILE: path>>> protocol; fall back to a single code fence."""
+def extract_files(text: str, default_name: Optional[str] = None,
+                  expected_name: Optional[str] = None) -> Dict[str, str]:
+    """Parse the <<<FILE: path>>> protocol; fall back to a single code fence.
+
+    ``expected_name`` pins the file the caller actually needs: models routinely
+    emit an absolute path (which would land in a nonsense nested directory), so a
+    basename match is remapped onto the expected relative path.
+    """
     text = strip_tool_markup(text)
     out: Dict[str, str] = {}
     for m in FILE_BLOCK.finditer(text or ""):
         path = m.group("path").strip().strip("`'\"")
         if path:
             out[path.lstrip("/")] = m.group("body").rstrip() + "\n"
+    if not out and expected_name:
+        fences = FENCE.findall(text or "")
+        if fences:
+            out[expected_name] = max(fences, key=len).rstrip() + "\n"
     if not out and default_name:
         fences = FENCE.findall(text or "")
         if fences:
-            body = max(fences, key=len)
-            out[default_name] = body.rstrip() + "\n"
+            out[default_name] = max(fences, key=len).rstrip() + "\n"
+    if expected_name:
+        norm: Dict[str, str] = {}
+        for rel, body in out.items():
+            name = Path(rel).name
+            if name == expected_name:
+                norm[expected_name] = body
+            else:
+                norm[rel] = body
+        out = norm
     return out
 
 
@@ -131,7 +149,7 @@ class OpenAIChatBackend(Backend):
                  name: str = "openai", max_tokens: int = 32768,
                  timeout: int = 600, reasoning_effort: Optional[str] = None,
                  system_prompt: str = NO_TOOLS_SYSTEM, stream: bool = True,
-                 retries: int = 3) -> None:
+                 retries: int = 3, idle_timeout: int = 240) -> None:
         self.system_prompt = system_prompt
         self.base_url = base_url.rstrip("/")
         self.model = model
@@ -142,6 +160,7 @@ class OpenAIChatBackend(Backend):
         self.reasoning_effort = reasoning_effort
         self.stream = stream
         self.retries = max(1, int(retries))
+        self.idle_timeout = int(idle_timeout)
 
     def complete(self, prompt: str, cwd: Optional[str] = None,
                  system: Optional[str] = None) -> AgentResult:
@@ -180,6 +199,7 @@ class OpenAIChatBackend(Backend):
         try:
             with urllib.request.urlopen(req, timeout=self.timeout) as resp:
                 if self.stream:
+                    self._arm_idle_timeout(resp)
                     text, usage = self._read_stream(resp)
                 else:
                     data = json.loads(resp.read().decode())
@@ -201,8 +221,23 @@ class OpenAIChatBackend(Backend):
             return AgentResult(False, backend=self.name, model=self.model,
                                error="empty completion", latency_s=time.time() - t0,
                                usage=usage)
+        # a stream that ended without a finish_reason was cut, not completed
+        if usage.get("stream_error") and usage.get("finish_reason") is None:
+            return AgentResult(False, text=text, backend=self.name,
+                               model=self.model,
+                               error=f"stream cut: {usage['stream_error']}",
+                               latency_s=time.time() - t0, usage=usage)
         return AgentResult(True, text=text, backend=self.name, model=self.model,
                            latency_s=time.time() - t0, usage=usage)
+
+    def _arm_idle_timeout(self, resp: Any, idle: Optional[int] = None) -> None:
+        """Fail a stalled stream instead of hanging on provider silence."""
+        seconds = int(idle or self.idle_timeout)
+        try:
+            sock = resp.fp.raw._sock  # type: ignore[attr-defined]
+            sock.settimeout(seconds)
+        except Exception:  # noqa: BLE001 — best effort, urlopen timeout still applies
+            pass
 
     def _read_stream(self, resp: Any) -> tuple:
         """Parse an SSE completion stream; partial text survives a broken pipe."""

@@ -431,8 +431,11 @@ def pareto_auc(res: SimResult, trace: DiscoveryTree,
                baseline: Optional[float] = None) -> float:
     """Area under the attainment curve, normalized to [0, 1].
 
-    x-axis: cumulative probes / probes available in that world (absolute work -
-    reaching the same attainment with fewer probes scores strictly higher).
+    x-axis: cumulative probes / probes this episode actually spent, so the curve
+    measures attainment *relative to the work committed*: reaching the same best
+    score and stopping costs a short x-range at full height, while probing the
+    rest of the grid stretches x and pulls the score down.  This is what makes
+    "few total probes" (Appendix B.2) a scored quantity rather than a free ride.
     y-axis: (best-so-far - baseline) / (trace ceiling - baseline), clamped.
     """
     if not res.curve:
@@ -441,7 +444,7 @@ def pareto_auc(res: SimResult, trace: DiscoveryTree,
     ceiling = max(trace.max_score(), base + 1e-9)
     span = max(ceiling - base, 1e-9)
     pts = res.curve
-    total = max(1, trace.size())
+    total = max(1, pts[-1][0])
     xs = [0.0]
     ys = [0.0]
     for probes, best, _rounds in pts:
@@ -451,7 +454,6 @@ def pareto_auc(res: SimResult, trace: DiscoveryTree,
     area = 0.0
     for i in range(1, len(xs)):
         area += (xs[i] - xs[i - 1]) * (ys[i] + ys[i - 1]) / 2.0
-    # the curve is flat after the last probe: only the swept work is credited
     return area
 
 

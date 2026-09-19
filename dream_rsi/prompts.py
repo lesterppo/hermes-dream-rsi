@@ -18,7 +18,10 @@ Emit every file you write with this exact framing, nothing else outside it:
 
 Write complete files. Do not abbreviate with "...". Do not use markdown code
 fences around a FILE block. A file you emit is written to disk exactly as-is, so
-never leave anything unfinished in it."""
+never leave anything unfinished in it.
+
+Paths are relative to your working directory: write `solution.py` or `method.py`
+exactly, never an absolute path and never a nested directory."""
 
 EXPLORATION_PROMPT = """You must read every historical proposal before proposing or implementing a new solution.
 

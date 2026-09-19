@@ -226,12 +226,12 @@ def feedback_text(reports: List[VersionReport], current: Optional[VersionReport]
                          f"{avail.get(ep.trace, '?')} | {ep.best} | "
                          f"{ep.terminated_by} |")
     lines.append("")
-    lines.append("Reading guide: `auc` uses the probes *available* in the world as "
-                 "the x-axis, so reaching the same best score with fewer probes "
-                 "scores strictly higher - stopping early after a plateau is a win, "
-                 "exhausting the grid is not. `parallel_penalty` is "
-                 "mean(effective_sequential_rounds / probes); with W workers a "
-                 "useful full batch approaches 1/W, a serial policy approaches 1.")
+    lines.append("Reading guide: `auc` is attainment vs the probes *you* spent, so "
+                 "reaching a high score EARLY in your own work is what pays: widen "
+                 "early, and do not spend probes after attainment stalled. "
+                 "`parallel_penalty` is mean(effective_sequential_rounds / probes); "
+                 "with W workers a useful full batch approaches 1/W, a serial "
+                 "policy approaches 1. Both matter: reward = auc - penalty.")
     if current is not None:
         lines.append("")
         lines.append(f"Current deployed policy scores reward={current.reward:.4f} "
@@ -306,17 +306,20 @@ def develop_policy(agent: Backend, round_dir: Path, version_tag: str,
                       + "COMPLETE `method.py` again, much shorter: no prose, no "
                       + "restating the instructions, no duplicated helpers.")
             continue
-        files = extract_files(result.text, default_name=str(method_path.name))
-        wrote = False
+        files = extract_files(result.text, expected_name=str(method_path.name))
         for rel, body in files.items():
             target = (version_dir / rel).resolve()
             if not str(target).startswith(str(version_dir.resolve())):
                 continue
             target.parent.mkdir(parents=True, exist_ok=True)
             target.write_text(body, encoding="utf-8")
-            wrote = True
-        if not wrote and not method_path.exists():
-            last_error = "agent produced no policy file"
+        if method_path.read_text(encoding="utf-8") == _template_policy():
+            last_error = ("the delivered file is byte-identical to the template - "
+                          "the policy was never edited")
+            prompt = (prompt + "\n\n## Previous attempt changed nothing\n\n"
+                      + f"Write your policy to the relative path "
+                      + f"`{method_path.name}` (no absolute paths). The file must "
+                      + "differ from the template stub you were given.")
             continue
         if (result.usage or {}).get("finish_reason") == "length":
             last_error = "truncated output (finish_reason=length)"

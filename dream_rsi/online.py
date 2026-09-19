@@ -175,7 +175,8 @@ class LiveSession:
             (node_dir / "agent_output.txt").write_text(result.text, encoding="utf-8")
         wrote = False
         if getattr(result, "ok", False):
-            files = extract_files(result.text, default_name=self.task.eval_program)
+            files = extract_files(result.text,
+                                  expected_name=self.task.eval_program)
             for rel, body in files.items():
                 target = node_dir / rel
                 if not str(target.resolve()).startswith(str(node_dir.resolve())):
