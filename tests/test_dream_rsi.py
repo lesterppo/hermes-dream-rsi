@@ -520,3 +520,84 @@ def test_see_policy_api_shim_exports_surface() -> None:
                                 branch_promising, finalize_result)
     assert LLMDesignedMethod.__name__ == "LLMDesignedMethod"
     assert callable(_record_curve) and callable(finalize_result)
+
+
+# --------------------------------------------------------------------------- #
+# hermes_hotpath task (real-repo hot path, hermetic)                          #
+# --------------------------------------------------------------------------- #
+def _hotpath_spec(tmp_path: Path) -> str:
+    """Build a tiny self-contained hot-path task (no network, no real repo)."""
+    module = tmp_path / "mod.py"
+    module.write_text(
+        "import re\n"
+        "def _scan(text):\n"
+        "    out = []\n"
+        "    for m in re.compile(r'id=\"(\\d+)\"').finditer(text):\n"
+        "        seg = text[m.start():m.start() + 200]\n"
+        "        v = re.search(r'v=(\\d+)', seg)\n"
+        "        out.append({'id': m.group(1), 'v': int(v.group(1)) if v else None})\n"
+        "    return out\n")
+    fixtures = tmp_path / "fx"
+    fixtures.mkdir()
+    for i in range(3):
+        body = " ".join(f'id="{i}{j}" v={j}' for j in range(20))
+        (fixtures / f"page{i}.html").write_text(body * 40, encoding="utf-8")
+    return (f"hermes_hotpath:label=unit,module={module},func=_scan,"
+            f"fixtures={fixtures},entry=parse,reps=2")
+
+
+def test_hotpath_task_freezes_reference_and_scores_baseline(tmp_path: Path,
+                                                            monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    task = build_task(_hotpath_spec(tmp_path))
+    assert task.name == "hermes_hotpath_unit"
+    assert len(task._fixtures) == 3
+    assert task.ref_path.exists() and task.golden_dir.exists()
+    goldens = [json.loads(p.read_text()) for p in task.goldens()]
+    assert all(isinstance(g, list) and g for g in goldens)
+    outcome = task.prepare(tmp_path / "root", tmp_path / "baseline")
+    assert outcome.valid and 0.4 < outcome.score < 2.5      # same code => ~1.0
+    assert outcome.n_valid == outcome.n_total == 3
+
+
+def test_hotpath_task_rejects_wrong_output(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    task = build_task(_hotpath_spec(tmp_path))
+    attempt = tmp_path / "attempt"
+    attempt.mkdir()
+    (attempt / "solution.py").write_text("def parse(html):\n    return []\n")
+    out = task.evaluate(attempt)
+    assert not out.valid and out.fail_class == "invalid"
+    assert "differs" in (out.error or "")
+    (attempt / "solution.py").write_text("def parse(html):\n    raise SystemExit\n")
+    out2 = task.evaluate(attempt)
+    assert not out2.valid and out2.fail_class == "runtime"
+    (attempt / "solution.py").write_text("def other(html):\n    return []\n")
+    out3 = task.evaluate(attempt)
+    assert not out3.valid and "not defined" in (out3.error or "")
+
+
+def test_hotpath_baseline_source_is_runnable(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    task = build_task(_hotpath_spec(tmp_path))
+    src = task.baseline_source()
+    assert "def _scan" in src and "parse = _scan" in src
+    ns: dict = {}
+    exec(compile(src, "baseline.py", "exec"), ns)  # noqa: S102
+    page = task._fixtures[0].read_text()
+    assert ns["parse"](page) == ns["_scan"](page)
+
+
+def test_build_task_escaped_comma_in_text_kwarg(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("HOME", str(tmp_path))
+    spec = _hotpath_spec(tmp_path).replace(
+        "entry=parse", "entry=parse,note=fix one\\, two")
+    task = build_task(spec)
+    assert task.note == "fix one, two"
+
+
+def test_build_task_parses_string_and_numeric_kwargs() -> None:
+    task = build_task("circle_packing:n=12")
+    assert task.n == 12
+    job = build_task("lasso_path:n=200,p=40,k=4")
+    assert (job.n, job.p, job.k) == (200, 40, 4)

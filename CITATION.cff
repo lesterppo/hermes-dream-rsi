@@ -1,0 +1,72 @@
+cff-version: 1.2.0
+message: "If you use this software, please cite the Dream-RSI paper and this implementation."
+title: "Dream-RSI: recursive self-improvement through evolving worlds (Hermes integration)"
+abstract: >-
+  Independent implementation of the Dream-RSI framework (arXiv:2609.14858):
+  a completed discovery history becomes a replay simulator in which candidate
+  exploration policies are improved by dreaming, then redeployed online. Ships a
+  standalone CLI, a Hermes native tool, deterministic offline mode, and tasks for
+  math optimisation, algorithm engineering and real-repository hot paths.
+authors:
+  - family-names: "Lester"
+    given-names: "Peter"
+    alias: "lesterppo"
+    website: "https://github.com/lesterppo"
+version: "1.0.0"
+date-released: "2026-09-20"
+license: "MIT"
+repository-code: "https://github.com/lesterppo/hermes-dream-rsi"
+keywords:
+  - recursive-self-improvement
+  - rsi
+  - exploration-policy
+  - replay-simulator
+  - world-model
+  - agentic-discovery
+  - llm-agent
+  - hermes
+  - automated-algorithm-discovery
+preferred-citation:
+  type: article
+  title: "Dream-RSI: Recursive Self-Improvement through Evolving Worlds"
+  authors:
+    - family-names: "Zheng"
+      given-names: "Tong"
+    - family-names: "Wu"
+      given-names: "Xidong"
+    - family-names: "Zhang"
+      given-names: "Zheng"
+    - family-names: "He"
+      given-names: "Zhankui"
+    - family-names: "Zhang"
+      given-names: "Chaoyi"
+    - family-names: "Coleman"
+      given-names: "Benjamin"
+    - family-names: "Wei"
+      given-names: "Ruoqiao"
+    - family-names: "Bai"
+      given-names: "Di"
+    - family-names: "Liu"
+      given-names: "Haolin"
+    - family-names: "Liu"
+      given-names: "Rui"
+    - family-names: "Wang"
+      given-names: "Xue"
+    - family-names: "Zhuan"
+      given-names: "Yue"
+    - family-names: "Kang"
+      given-names: "Wang-Cheng"
+    - family-names: "Xiang"
+      given-names: "Renkai"
+    - family-names: "Huang"
+      given-names: "Heng"
+    - family-names: "Cheng"
+      given-names: "Xinwu"
+    - family-names: "Guo"
+      given-names: "Yunsong"
+  journal: "arXiv preprint"
+  year: 2026
+  identifiers:
+    - type: other
+      value: "arXiv:2609.14858"
+      description: "arXiv identifier"
