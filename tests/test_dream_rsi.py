@@ -208,6 +208,24 @@ def test_pareto_auc_zero_when_never_beats_baseline() -> None:
 # --------------------------------------------------------------------------- #
 # policies                                                                    #
 # --------------------------------------------------------------------------- #
+def test_signal_helpers_accept_single_observation_and_branch_forms() -> None:
+    # paper-style call: branch_failed_hard(obs) / branch_promising(obs)
+    from dream_rsi.simulator import (Observation, branch_failed_hard,
+                                     branch_promising)
+    ok = Observation(cell="b0#a0", branch=0, attempt=0, score=1.0,
+                     delta_vs_baseline=0.5, delta_vs_parent=0.5)
+    bad = Observation(cell="b0#a1", branch=0, attempt=1, score=0.0,
+                      evaluated=False, fail_class="compile", error="boom",
+                      n_valid=0)
+    assert branch_promising(ok) and not branch_failed_hard(ok)
+    assert branch_failed_hard(bad) and not branch_promising(bad)
+    # sequence form still works
+    assert branch_promising([ok, bad], 0)
+    assert not branch_failed_hard([ok], 0)
+    with pytest.raises(TypeError):
+        branch_failed_hard([ok])
+
+
 def test_policies_emit_legal_batches_and_use_parallelism() -> None:
     tree = make_trace(attempts=3, branches=3)
     for cls in (ParallelRefinePolicy, PortfolioPolicy):

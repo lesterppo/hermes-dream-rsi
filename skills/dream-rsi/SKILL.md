@@ -46,6 +46,15 @@ implemented against the paper's method section and its two appendix prompts.
 
 Eq. (1) objective, reported alongside: `max s_v - beta1*N + beta2*N/max(1,k)`.
 
+## Doing a real repository hot path (`hermes_hotpath`)
+
+Lifts one function out of a repo file with `ast`, freezes its output on read-only
+fixtures as the golden reference, and scores `median(ref)/median(candidate)` gated on
+**exact** output equality. The repository file is never modified. Verified live on
+`ota.py::_parse_trip_cards`: 18/18 attempts byte-identical, best **3.36x** speedup
+(5.54 ms → 1.65 ms per 5-page sweep), and the round-2 dream improved the policy
+(0.196080 → 0.203183). Keep spec `note=` free of commas.
+
 ## Commands
 
 ```bash

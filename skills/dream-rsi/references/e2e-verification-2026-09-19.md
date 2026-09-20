@@ -178,3 +178,41 @@ reply echoed the prompt, the FILE-header regex captured prose/math as the path, 
 0 nodes. Fixed by `_safe_rel_path` (charset, length, no traversal segments; absolute
 paths accepted then remapped by basename) plus per-file write guards in both the
 online rollout and policy development. Regression test added (34 tests).
+
+
+## Update — 2026-09-20 late: `hermes_hotpath` live on a real repository function
+
+Task: `~/hermes/scripts/travel/ota.py::_parse_trip_cards` — parse Trip.com SSR hotel
+cards out of a 0.5-1 MB page. 5 real pages captured once as read-only fixtures, golden
+outputs frozen from an `ast`-extracted copy of the original function, repository file
+never touched. Agent: `gemini:pro` (zero API cost), 2 rounds x 3 branches x 3 attempts,
+`--repairs 2`.
+
+- 18 attempts, **all valid**: exact JSON equality with the reference on every page
+- speedups 1.05x - **3.36x** (best cell `b1#a2`: reference 5.54 ms per 5-page sweep →
+  1.65 ms), i.e. the loop found a real 3x speedup in an existing tool of mine
+- round-2 dreaming improved the exploration policy (0.196080 → **0.203183**, auc/penalty
+  on the same two worlds) and redeployed it, `improved: true`
+
+Four integration bugs surfaced and were fixed along the way:
+
+1. **Helper signatures must match the paper's prompt.** Policies written to the
+   Appendix B.2 API call `branch_failed_hard(obs)` with a single observation; our
+   helpers required `(observations, branch)`, so every developed policy died with
+   `TypeError` and the cycle silently kept the incumbent. Helpers now accept either
+   form (single `Observation`, or a sequence plus branch id).
+2. **Markdown autolinking corrupts generated code.** The Gemini CLI returns markdown,
+   which rewrote `"https://…/hotelId=700948"` into
+   `"[https://…/hotelId=](https://…/hotelId=)700948"` inside a candidate's string
+   literal — a silent correctness failure. `delink()` now restores `[url](url)` →
+   `url` and unescapes `\_`/`\*` in every extracted file, and the prompt forbids
+   markdown link syntax inside code.
+3. **The gate needs to say what is wrong.** Exact-equality rejection now reports the
+   first field-level discrepancies (`trip_bangkok[0].p: got None want 437.0`) instead
+   of just naming the page, which is what let the repair attempts converge.
+4. **Spec strings travel through shells.** Commas inside a text kwarg split the spec;
+   escaped commas were unreliable through two shell layers, so use a comma-free note
+   (the parser still honours `\,`).
+
+Fixture/golden caching lives under `~/.hermes/dream_rsi_tasks/hotpath_<label>/`, so a
+change to the upstream function does not silently move the score.

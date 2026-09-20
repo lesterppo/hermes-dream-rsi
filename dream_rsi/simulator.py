@@ -101,21 +101,47 @@ def finalize_result(question: "ReplayQuestion", res: SimResult) -> SimResult:
     return res
 
 
-def branch_promising(observations: Sequence[Observation], branch: int,
+HARD_FAIL = {"compile", "runtime", "timeout", "env", "invalid"}
+
+
+def branch_promising(observations: Any, branch: Optional[int] = None,
                      eps: float = 0.0) -> bool:
-    obs = [o for o in observations if o.branch == branch and o.evaluated]
-    if not obs:
+    """Prefix signal: does this branch show any improvement over its anchors?
+
+    Accepts either a single ``Observation`` (paper-style ``branch_promising(obs)``)
+    or a sequence of observations plus the branch id.
+    """
+    if isinstance(observations, Observation):
+        obs = observations
+        if not obs.evaluated:
+            return False
+        return obs.delta_vs_baseline > eps or obs.delta_vs_parent > eps
+    if branch is None:
+        raise TypeError("branch_promising(observations, branch) needs a branch id")
+    obs_list = [o for o in observations if o.branch == branch and o.evaluated]
+    if not obs_list:
         return False
-    return any(o.delta_vs_baseline > eps or o.delta_vs_parent > eps for o in obs)
+    return any(o.delta_vs_baseline > eps or o.delta_vs_parent > eps for o in obs_list)
 
 
-def branch_failed_hard(observations: Sequence[Observation], branch: int) -> bool:
-    obs = [o for o in observations if o.branch == branch]
-    if not obs:
+def branch_failed_hard(observations: Any, branch: Optional[int] = None) -> bool:
+    """Prefix signal: is this branch's evidence a hard, unrecoverable failure?
+
+    Accepts either a single ``Observation`` (paper-style
+    ``branch_failed_hard(obs)``) or a sequence of observations plus the branch id.
+    """
+    if isinstance(observations, Observation):
+        obs = observations
+        if obs.evaluated and obs.error is None and obs.fail_class == "ok":
+            return False
+        return obs.fail_class in HARD_FAIL and obs.n_valid in (None, 0)
+    if branch is None:
+        raise TypeError("branch_failed_hard(observations, branch) needs a branch id")
+    obs_list = [o for o in observations if o.branch == branch]
+    if not obs_list:
         return False
-    hard = {"compile", "runtime", "timeout", "env", "invalid"}
-    return all((not o.evaluated) or o.fail_class in hard for o in obs) and \
-        all(o.n_valid in (None, 0) for o in obs)
+    return all((not o.evaluated) or o.fail_class in HARD_FAIL for o in obs_list) and \
+        all(o.n_valid in (None, 0) for o in obs_list)
 
 
 def probe_improved_vs_parent(obs: Observation, eps: float = 0.0) -> bool:

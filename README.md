@@ -7,7 +7,7 @@
 > native tool (`dream_rsi`, toolset `dream_rsi`).
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](#tests)
+[![Tests](https://img.shields.io/badge/tests-41%20passing-brightgreen)](#tests)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![arXiv](https://img.shields.io/badge/arXiv-2609.14858-b31b1b)](https://arxiv.org/abs/2609.14858)
 [![Cost](https://img.shields.io/badge/agent%20back--ends-%240%20mode-success)](#agent-back-ends)
@@ -54,7 +54,7 @@ per-attempt workspaces, `eval/score.json`, `beta_sweep.json`,
 |---|---|---|---|---|
 | `circle_packing` n=10 | math optimisation | 0.125 (grid) | **0.148204** = published optimum | round-1 dream: 0.780934 → **0.781071** reward, then policy-driven plan adaptation 6×4 → 6×3 at equal attainment (30 → 24 probes/round) |
 | `lasso_path` n=600 p=120 | algorithm engineering | 1.0× (reference coordinate descent) | **4.27× speedup** (also 3.48× / 2.68× / 2.17×) | incumbent 0.168685 → developed **0.280949** (+66.5% replay reward); redeployed, next online round found the better solver |
-| `hermes_hotpath` (real repo hot path) | tooling | 1.0× | single-pass, slice-free rewrite measured at **1.81×**, outputs byte-identical | loop support included; fixtures + goldens frozen |
+| `hermes_hotpath` (`ota.py::_parse_trip_cards`, 5 real 0.5–1 MB pages) | tooling | 1.0× (5.54 ms/sweep) | **3.36× (1.65 ms/sweep)** across 18 validated attempts (1.05–3.36×), every one byte-identical to the original | round-2 dream: exploration policy 0.196080 → **0.203183** reward, redeployed |
 
 Long-horizon run: 4 rounds × 6 branches × 5 attempts = 102 live attempts, W=6,
 0 failed attempts, best 0.14820432256522875 (= the published n=10 optimum), held
@@ -218,7 +218,7 @@ class OptimalPolicy(LLMDesignedMethod):
 ## Tests
 
 ```bash
-PYTHONPATH=. python3 -m pytest tests -q     # 40 tests
+PYTHONPATH=. python3 -m pytest tests -q     # 41 tests
 ```
 
 Tree round-trip; replay legality (duplicates, parent+child, oversize, invented
