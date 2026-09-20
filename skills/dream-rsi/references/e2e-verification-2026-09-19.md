@@ -79,3 +79,44 @@ python3 -m dream_rsi.cli loop --run /tmp/dr --task circle_packing --agent mock \
 python3 -m dream_rsi.cli explore --run R --agent deepseek --workers 3 \
   --branches 3 --refines 4 --repairs 1      # ~15 live attempts, ~10 min
 ```
+
+
+## Update — 2026-09-20: first real policy improvement (lasso_path), and the AUC axis settled
+
+Two changes mattered:
+
+1. **AUC axis.** Attainment is integrated against ABSOLUTE work
+   (`x = cumulative_probes / probes_in_world`, flat-extended to x = 1). Normalizing
+   by the episode's own probes credits a policy for *spending more* after the
+   plateau, so every policy tied at "probe everything"; normalizing by the world
+   size and *not* extending rewards stopping early only because the tail is
+   truncated. The absolute + flat-extended axis makes early attainment (which is
+   decided by how fast slots are freed from dead branches) the scored quantity,
+   and the new `first_reach_probe` diagnostic reports the concrete target
+   ("ceiling reached at probe N").
+   Fixture check (30-cell world, 2 productive branches of 6, W=3):
+   widen-all-exhaust first_reach 22, auc 0.479, reward 0.079 vs
+   best-first-and-wave first_reach 9, auc 0.797, reward 0.161.
+
+2. **`loop --branches/--refines`.** Grid size was previously fixed by the task
+   defaults, so a "wide" run silently produced a 4x2 grid. The CLI now sets the
+   planning-context fallbacks (and round 1), still bounded by `--hard-branch` /
+   `--hard-refine` and by the worker cap (the paper's `W` is both the branch count
+   and the concurrency, so `--branches 6` needs `--workers 6`).
+
+### Live result: `lasso_path` (n=600, p=120, k=10), 2 rounds, W=3, M=1
+
+- reference coordinate descent = speedup 1.0 (baseline floor)
+- round 1 (6 attempts): best 2.42x speedup, 0 failures; dreaming: m001 vs incumbent
+  0.2715 → m001 lost, incumbent kept (`improved: false`)
+- round 2 (6 attempts): best **4.27x speedup** (3.48x / 2.68x / 2.17x also > 2x)
+- round 2 dreaming: incumbent (baseline policy) reward **0.168685** (auc 0.669,
+  penalty 0.500) vs the LLM-developed 380-line adaptive portfolio policy
+  **0.280949** (auc 0.781, penalty 0.500) — a +66.5% relative replay gain, so
+  `m001_20260920-141505` was deployed to `policies/current.py` and archived under
+  `policies/versions/`. `improved: true` — the RSI loop closed with a genuinely
+  better exploration policy and the next online round found a better solver.
+
+Honest reading: the win came from the algorithm-engineering task where branch
+values are heterogeneous, which is where pruning and portfolio composition pay.
+The circle-packing worlds (all branches near the ceiling) still tie, as expected.

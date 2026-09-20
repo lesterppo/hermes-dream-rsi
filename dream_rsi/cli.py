@@ -147,7 +147,9 @@ def cmd_loop(args: argparse.Namespace) -> int:
                    hard_branch=args.hard_branch, hard_refine=args.hard_refine,
                    agent_timeout=args.timeout, verbose=args.verbose,
                    repairs=args.repairs, cfg=ObjectiveConfig(lam=args.lam),
-                   max_tokens=args.max_tokens)
+                   max_tokens=args.max_tokens,
+                   branches=(args.branches or None),
+                   refines=(None if args.refines < 0 else args.refines))
     layout = _layout(args.run)
     report = layout.root / "loop_report.json"
     report.write_text(json.dumps(out["history"], indent=1), encoding="utf-8")
@@ -283,6 +285,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--hard-refine", type=int, default=6)
     sp.add_argument("--repairs", type=int, default=1,
                     help="re-ask the discovery agent after a failed attempt")
+    sp.add_argument("--branches", type=int, default=0,
+                    help="round-1 grid width (planning-context fallback)")
+    sp.add_argument("--refines", type=int, default=-1,
+                    help="round-1 grid depth (planning-context fallback)")
     sp.set_defaults(func=cmd_loop)
 
     sp = sub.add_parser("status", help="run status")

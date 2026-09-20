@@ -21,8 +21,8 @@ from .agents import Backend, extract_files
 from .grid import GridPlanningContext
 from .policy_api import LLMDesignedMethod
 from .prompts import improvement_prompt
-from .simulator import (ObjectiveConfig, SimResult, pareto_auc, pareto_reward,
-                        parallel_penalty, run_replay_episode)
+from .simulator import (ObjectiveConfig, SimResult, first_reach_probe, pareto_auc,
+                        pareto_reward, parallel_penalty, run_replay_episode)
 from .traces import RunLayout, append_jsonl, write_json
 from .tree import DiscoveryTree
 
@@ -80,6 +80,7 @@ class EpisodeEval:
     decision_rounds: int
     best: Optional[float]
     terminated_by: str
+    first_reach: Optional[int] = None
     error: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
@@ -88,6 +89,7 @@ class EpisodeEval:
             "auc": round(self.auc, 6), "parallel_penalty": round(self.penalty, 6),
             "reward": round(self.reward, 6), "probes": self.probes,
             "decision_rounds": self.decision_rounds, "best": self.best,
+            "first_reach_probe": self.first_reach,
             "terminated_by": self.terminated_by, "error": self.error,
         }
 
@@ -144,7 +146,8 @@ def evaluate_version(policy_path: str | Path, traces: List[DiscoveryTree],
                 probes=res.probes, decision_rounds=res.decision_rounds,
                 best=(None if res.best_score == float("-inf")
                       else round(res.best_score, 6)),
-                terminated_by=res.terminated_by, error=res.error)
+                terminated_by=res.terminated_by,
+                first_reach=first_reach_probe(res, trace), error=res.error)
             report.episodes.append(ep)
             rewards.append(ep.reward)
             if ep.error:
@@ -217,21 +220,26 @@ def feedback_text(reports: List[VersionReport], current: Optional[VersionReport]
                  "world contains):")
     lines.append("")
     lines.append("| version | beta | trace | probes spent | available | best | "
-                 "terminated_by |")
-    lines.append("|---|---|---|---|---|---|---|")
+                 "ceiling reached at probe | terminated_by |")
+    lines.append("|---|---|---|---|---|---|---|---|")
     avail = {f"{t.task}#{i}": t.size() for i, t in enumerate(traces)}
     for r in reports:
         for ep in r.episodes:
+            reached = ("never" if ep.first_reach is None else str(ep.first_reach))
             lines.append(f"| {r.name} | {ep.beta:.2f} | {ep.trace} | {ep.probes} | "
-                         f"{avail.get(ep.trace, '?')} | {ep.best} | "
+                         f"{avail.get(ep.trace, '?')} | {ep.best} | {reached} | "
                          f"{ep.terminated_by} |")
     lines.append("")
-    lines.append("Reading guide: `auc` is attainment vs the probes *you* spent, so "
-                 "reaching a high score EARLY in your own work is what pays: widen "
-                 "early, and do not spend probes after attainment stalled. "
-                 "`parallel_penalty` is mean(effective_sequential_rounds / probes); "
-                 "with W workers a useful full batch approaches 1/W, a serial "
-                 "policy approaches 1. Both matter: reward = auc - penalty.")
+    lines.append("Reading guide: `auc` is attainment against ABSOLUTE work "
+                 "(probes / probes the world contains), flat-extended, so the "
+                 "score is decided by how early in the grid you reach high "
+                 "attainment: probes spent on unproductive branches push the rise "
+                 "later and cost you. `parallel_penalty` is "
+                 "mean(effective_sequential_rounds / probes); with W workers a "
+                 "useful full batch approaches 1/W, a serial policy approaches 1. "
+                 "`ceiling reached at probe` is the concrete target: if the "
+                 "incumbent needs probe N to touch the world's ceiling, a policy "
+                 "that needs N-2 with the same batches wins.")
     if current is not None:
         lines.append("")
         lines.append(f"Current deployed policy scores reward={current.reward:.4f} "

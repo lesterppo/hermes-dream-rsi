@@ -174,7 +174,9 @@ def run_loop(run_dir: str | Path, task_spec: str, agent_spec: str,
              agent_timeout: int = 900, verbose: bool = True,
              cfg: Optional[ObjectiveConfig] = None,
              task_kwargs: Optional[Dict[str, Any]] = None,
-             repairs: int = 1, max_tokens: int = 32768) -> Dict[str, Any]:
+             repairs: int = 1, max_tokens: int = 32768,
+             branches: Optional[int] = None,
+             refines: Optional[int] = None) -> Dict[str, Any]:
     """Full RSI loop: explore -> simulate -> dream -> redeploy, T times."""
     cfg = cfg or ObjectiveConfig()
     betas = list(betas or DEFAULT_BETAS)
@@ -185,6 +187,12 @@ def run_loop(run_dir: str | Path, task_spec: str, agent_spec: str,
         state["round"] = 0
         state["current_beta"] = state.get("current_beta", 0.6)
     task = build_task(task_spec, **(task_kwargs or {}))
+    # CLI grid overrides become the planning-context fallbacks (hard caps still
+    # bound what any policy may create) and the round-1 grid.
+    if branches:
+        task.default_branches = int(branches)
+    if refines is not None:
+        task.default_refines = int(refines)
     state = ensure_baseline(layout, task, state)
     ensure_policy(layout, state)
 

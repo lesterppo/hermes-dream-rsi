@@ -429,32 +429,51 @@ def parallel_penalty(res: SimResult) -> float:
 
 def pareto_auc(res: SimResult, trace: DiscoveryTree,
                baseline: Optional[float] = None) -> float:
-    """Area under the attainment curve, normalized to [0, 1].
+    """Area under the attainment-vs-budget curve, normalized to [0, 1].
 
-    x-axis: cumulative probes / probes this episode actually spent, so the curve
-    measures attainment *relative to the work committed*: reaching the same best
-    score and stopping costs a short x-range at full height, while probing the
-    rest of the grid stretches x and pulls the score down.  This is what makes
-    "few total probes" (Appendix B.2) a scored quantity rather than a free ride.
-    y-axis: (best-so-far - baseline) / (trace ceiling - baseline), clamped.
+    x-axis is ABSOLUTE work: cumulative probes / probes the world contains, so two
+    policies are compared on the same axis (spending fewer probes is not rewarded
+    by itself - spending slots on dead branches is, because it delays the rise).
+    The curve is flat-extended to x = 1: whatever attainment a policy reached
+    stands as attainable at any larger budget, which is the Pareto reading of
+    "reaching high per-trace attainment".
+
+    y-axis: (best-so-far - baseline) / (trace ceiling - baseline), clamped to
+    [0, 1].  A policy that wastes early slots on unproductive branches rises late
+    and scores lower; one that frees slots for the productive branch rises early
+    and scores higher.
     """
     if not res.curve:
         return 0.0
     base = float(trace.baseline_score if baseline is None else baseline)
     ceiling = max(trace.max_score(), base + 1e-9)
     span = max(ceiling - base, 1e-9)
+    total = max(1, trace.size())
     pts = res.curve
-    total = max(1, pts[-1][0])
     xs = [0.0]
     ys = [0.0]
     for probes, best, _rounds in pts:
         xs.append(min(1.0, probes / total))
         y = 0.0 if best == -math.inf else (best - base) / span
         ys.append(max(0.0, min(1.0, y)))
+    if xs[-1] < 1.0:                      # flat extension to the full budget axis
+        xs.append(1.0)
+        ys.append(ys[-1])
     area = 0.0
     for i in range(1, len(xs)):
         area += (xs[i] - xs[i - 1]) * (ys[i] + ys[i - 1]) / 2.0
     return area
+
+
+def first_reach_probe(res: SimResult, trace: DiscoveryTree) -> Optional[int]:
+    """Probe index at which the world's ceiling was first reached (diagnostic)."""
+    if not res.curve:
+        return None
+    ceiling = trace.max_score()
+    for probes, best, _k in res.curve:
+        if best != -math.inf and best >= ceiling - 1e-12:
+            return probes
+    return None
 
 
 def pareto_reward(auc: float, penalty: float, cfg: ObjectiveConfig = ObjectiveConfig()
