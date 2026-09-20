@@ -65,6 +65,11 @@ actions `tasks|init|explore|dream|replay|loop|status|show|policy`. Pointer JSON 
 ## Agent back-ends
 
 `deepseek[:model]` (default; key from `$DEEPSEEK_API_KEY` or `~/.dsh/.env`),
+`gemini[:flash|pro|thinking|lite]` (**zero API cost** — drives the Gemini web CLI
+on browser cookies; stdout is pointer JSON so the template writes the reply to a
+file and cats it back for the FILE protocol). Live check: `explore --agent gemini
+--branches 2 --refines 1` produced 4 attempts, 0 failures, best 0.148204 = the
+published n=10 optimum, with no paid API involved.
 `dsh` (DeepSeek Harness headless — the agent edits files itself),
 `openai:<base>|<model>|<keyfile>`, `cmd:<template>` (`{prompt}`/`{file}`/`{dir}`),
 `mock` (deterministic offline — the entire loop runs with no network, useful for
@@ -94,6 +99,12 @@ regression runs and for proving the machinery).
   opposite of the paper's "few total probes" intent — measured both ways on a
   15-node fixture: exhausting scored 0.69 vs 0.15, while the intended reading is
   that widening early and stopping on a plateau is what pays.
+- **Model text can masquerade as a FILE header.** A Gemini reply echoed the prompt
+  and the header regex captured a long prose/math string as the "path", producing
+  `OSError: File name too long` that killed the whole rollout (`policy-error`, 0
+  nodes). Paths are now sanitized (`_safe_rel_path`: charset + length + no `..`
+  segments; absolute paths are tolerated and remapped by basename) and every
+  per-file write is wrapped so one bad path cannot abort an episode.
 - **FILE paths must stay relative.** Models emit the absolute workspace path in
   the FILE header; the naive `lstrip('/')` turned that into a nested directory and
   the real target stayed untouched, so the developed "policy" was byte-identical

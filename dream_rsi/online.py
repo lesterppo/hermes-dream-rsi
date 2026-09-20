@@ -178,12 +178,18 @@ class LiveSession:
             files = extract_files(result.text,
                                   expected_name=self.task.eval_program)
             for rel, body in files.items():
-                target = node_dir / rel
-                if not str(target.resolve()).startswith(str(node_dir.resolve())):
-                    continue  # ignore traversal attempts
-                target.parent.mkdir(parents=True, exist_ok=True)
-                target.write_text(body, encoding="utf-8")
-                wrote = True
+                try:
+                    target = node_dir / rel
+                    if not str(target.resolve()).startswith(str(node_dir.resolve())):
+                        continue  # ignore traversal attempts
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    target.write_text(body, encoding="utf-8")
+                    wrote = True
+                except OSError as exc:
+                    # a bad path from the model must not kill the rollout
+                    (node_dir / "eval" / "write_errors.txt").open("a").write(
+                        f"{rel[:80]}: {exc}\n")
+                    continue
             if getattr(result, "wrote_files", False):
                 wrote = wrote or self.task.program_path(node_dir).exists()
         if not wrote:

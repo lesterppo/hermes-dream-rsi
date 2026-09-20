@@ -159,3 +159,22 @@ Command: `loop --run ~/.hermes/dream_rsi_runs/long --task circle_packing --round
 - policy self-improvement: lasso_path +66.5% replay reward and 4.27x online
   speedup after redeploy; circle_packing +0.02% then a stable plateau with
   policy-driven plan adaptation
+
+
+## Update — 2026-09-20 night: zero-cost agent backend + path sanitizing
+
+`--agent gemini[:flash|pro|thinking|lite]` now drives the Gemini web CLI
+(`~/.local/bin/gemini.py`, browser-cookie auth) as the discovery and policy agent,
+so a whole RSI run can cost $0 in API spend. Live check:
+
+    explore --run /tmp/dr_gem2 --task circle_packing --agent gemini \
+      --workers 2 --branches 2 --refines 1 --k1 8 --repairs 1
+    -> {"ok":true,"t":4,"best":0.148204,"p":4,"k":2,"fail":0}
+
+4 attempts, 0 failures, best = the published n=10 optimum, no paid API. The first
+attempt at this backend failed for an unrelated reason worth remembering: the Gemini
+reply echoed the prompt, the FILE-header regex captured prose/math as the path, and
+`mkdir` raised `OSError: File name too long`, which surfaced as `policy-error` with
+0 nodes. Fixed by `_safe_rel_path` (charset, length, no traversal segments; absolute
+paths accepted then remapped by basename) plus per-file write guards in both the
+online rollout and policy development. Regression test added (34 tests).

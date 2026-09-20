@@ -269,6 +269,17 @@ def test_extract_files_protocol_and_fence_fallback() -> None:
     assert extract_files("nothing useful", "s.py") == {}
 
 
+def test_extract_files_drops_implausible_paths() -> None:
+    # a model echoing the protocol with prose/math instead of a file name
+    junk = "<<<FILE: # ## $(x_i $N=\"10$). \" $N$ $[0,1]^2$ some very long "
+    junk += "prose that is not a filename at all>>>\nbody\n<<<END>>>\n"
+    files = extract_files(junk, expected_name="solution.py")
+    assert all(len(k) < 121 for k in files), files
+    ok = extract_files("<<<FILE: solution.py>>>\nx = 1\n<<<END>>>")
+    assert list(ok) == ["solution.py"]
+    assert extract_files("<<<FILE: ../../etc/passwd>>>\nx\n<<<END>>>") == {}
+
+
 def test_mock_agent_emits_policy_for_improvement_prompt() -> None:
     agent = MockBackend(task="circle_packing")
     res = agent.complete("You are improving one **prefix-only exploration policy**.")

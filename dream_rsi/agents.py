@@ -69,20 +69,44 @@ def strip_tool_markup(text: str) -> str:
     return out
 
 
+SAFE_PATH = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._/-]{0,119}$")
+
+
+def _safe_rel_path(path: str) -> Optional[str]:
+    """Accept only a plausible file path from a model's FILE header.
+
+    Absolute paths are tolerated (the caller remaps by basename), but traversal
+    segments and anything that is not a file name (prose or math captured by the
+    header regex) are rejected instead of becoming a filesystem error.
+    """
+    candidate = path.strip().strip("`'\"")
+    if not candidate:
+        return None
+    parts = [p for p in candidate.split("/") if p not in ("", ".")]
+    if not parts or any(p == ".." for p in parts):
+        return None
+    rel = "/".join(parts)
+    if not SAFE_PATH.match(rel) or rel.endswith("/"):
+        return None
+    return rel
+
+
 def extract_files(text: str, default_name: Optional[str] = None,
                   expected_name: Optional[str] = None) -> Dict[str, str]:
     """Parse the <<<FILE: path>>> protocol; fall back to a single code fence.
 
     ``expected_name`` pins the file the caller actually needs: models routinely
     emit an absolute path (which would land in a nonsense nested directory), so a
-    basename match is remapped onto the expected relative path.
+    basename match is remapped onto the expected relative path.  Paths that are not
+    plausible file names (prose or math captured by the header regex) are dropped
+    rather than turned into a filesystem error.
     """
     text = strip_tool_markup(text)
     out: Dict[str, str] = {}
     for m in FILE_BLOCK.finditer(text or ""):
-        path = m.group("path").strip().strip("`'\"")
-        if path:
-            out[path.lstrip("/")] = m.group("body").rstrip() + "\n"
+        rel = _safe_rel_path(m.group("path"))
+        if rel:
+            out[rel] = m.group("body").rstrip() + "\n"
     if not out and expected_name:
         fences = FENCE.findall(text or "")
         if fences:
@@ -428,6 +452,14 @@ def lasso_path(X, y, lam_path):
 # --------------------------------------------------------------------------- #
 # factory                                                                     #
 # --------------------------------------------------------------------------- #
+def _gemini_cli_path() -> Optional[str]:
+    for cand in (Path.home() / ".local" / "bin" / "gemini.py",
+                 Path.home() / "gemini-cli" / "gemini.py"):
+        if cand.exists():
+            return str(cand)
+    return _which("gemini.py") or _which("gemini")
+
+
 def make_agent(spec: str = "deepseek", model: str = "", timeout: int = 900,
                program_name: str = "solution.py", task: str = "",
                max_tokens: int = 32768) -> Backend:
@@ -436,6 +468,18 @@ def make_agent(spec: str = "deepseek", model: str = "", timeout: int = 900,
         return MockBackend(model="mock", program_name=program_name, task=task)
     if spec == "dsh":
         return DshBackend(timeout=timeout, model=model)
+    if spec.startswith("gemini"):
+        # Zero-API-cost discovery agent: the Gemini web CLI (browser-cookie auth).
+        # Its stdout is pointer JSON, so the template writes the response to a file
+        # in the attempt dir and cats it back for the FILE protocol.
+        cli = _gemini_cli_path()
+        if not cli:
+            raise AgentError("gemini CLI not found (expected ~/.local/bin/gemini.py)")
+        mdl = spec.split(":", 1)[1] if ":" in spec else (model or "flash")
+        template = (f'python3 {shlex.quote(cli)} -m {shlex.quote(mdl)} '
+                    f'-p "$(cat {{file}})" -o {{dir}}/resp.md >/dev/null 2>&1; '
+                    f'cat {{dir}}/resp.md')
+        return CmdBackend(template, timeout=timeout, model=f"gemini-{mdl}")
     if spec.startswith("cmd:"):
         return CmdBackend(spec[4:], timeout=timeout, model=model)
     if spec.startswith("openai:"):
@@ -467,6 +511,9 @@ def agent_list() -> List[Dict[str, Any]]:
              "note": "DeepSeek API, one-shot text -> files"}]
     rows.append({"spec": "dsh", "ready": bool(_which("dsh")),
                  "note": "DeepSeek Harness headless, agentic file edits"})
+    rows.append({"spec": "gemini[:flash|pro|thinking|lite]",
+                 "ready": bool(_gemini_cli_path()),
+                 "note": "zero-API-cost discovery agent via Gemini web CLI cookies"})
     rows.append({"spec": "mock", "ready": True, "note": "offline deterministic"})
     rows.append({"spec": "openai:<base>|<model>|<keyfile>", "ready": True,
                  "note": "any OpenAI-compatible endpoint"})

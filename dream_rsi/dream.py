@@ -316,11 +316,14 @@ def develop_policy(agent: Backend, round_dir: Path, version_tag: str,
             continue
         files = extract_files(result.text, expected_name=str(method_path.name))
         for rel, body in files.items():
-            target = (version_dir / rel).resolve()
-            if not str(target).startswith(str(version_dir.resolve())):
+            try:
+                target = (version_dir / rel).resolve()
+                if not str(target).startswith(str(version_dir.resolve())):
+                    continue
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(body, encoding="utf-8")
+            except OSError:
                 continue
-            target.parent.mkdir(parents=True, exist_ok=True)
-            target.write_text(body, encoding="utf-8")
         if method_path.read_text(encoding="utf-8") == _template_policy():
             last_error = ("the delivered file is byte-identical to the template - "
                           "the policy was never edited")
