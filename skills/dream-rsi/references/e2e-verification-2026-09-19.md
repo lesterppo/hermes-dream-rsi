@@ -120,3 +120,42 @@ Two changes mattered:
 Honest reading: the win came from the algorithm-engineering task where branch
 values are heterogeneous, which is where pruning and portfolio composition pay.
 The circle-packing worlds (all branches near the ceiling) still tie, as expected.
+
+
+## Update — 2026-09-20 evening: long-horizon run, 4 rounds x 6x5 grid (circle_packing)
+
+Command: `loop --run ~/.hermes/dream_rsi_runs/long --task circle_packing --rounds 4
+--workers 6 --k1 64 --versions 2 --betas 0.3,0.6,0.9 --k2 64 --hard-branch 6
+--hard-refine 4 --branches 6 --refines 4 --repairs 1`. Cost: 102 discovery calls
+(~2 h wall at W=6) + 8 policy-development calls. Zero failed attempts.
+
+| round | plan | probes | best | selected version | reward | improved |
+|---|---|---|---|---|---|---|
+| 1 | 6x4 (30 cells) | 30 | 0.148204 | m002_20260920-144122 | 0.781071 | **true** |
+| 2 | 6x3 (24) | 24 | 0.148204 | m000_current | 0.775931 | false |
+| 3 | 6x3 (24) | 24 | 0.148204 | m000_current | 0.774204 | false |
+| 4 | 6x3 (24) | 24 | 0.148204 | m000_current | 0.773146 | false |
+
+- discovery: final best **0.14820432256522875** = the published optimum for n=10
+  (cell `b3#a2`), reached in round 1 and held for three more rounds.
+- round-1 dreaming: incumbent 0.780934 vs m002 0.781071 (auc 0.981071, penalty
+  0.2) - a marginal but real gain, so `m002_20260920-144122` (413 lines) was
+  deployed; rounds 2-4 then honestly kept the incumbent (candidates 0.77314 /
+  0.764684 trailed).
+- **adaptive cross-cycle planning observed**: rounds 2-4 planned `6x3` with the
+  reason string `live best plateaued; widen one direction and trim depth`, emitted
+  by the deployed LLM policy's `plan_grid` reading the prefix-safe cycle history -
+  30 probes/round dropped to 24 with the same best score.
+- the ceiling is `auc ~ 0.98 / penalty 0.2` here: all policies that widen first and
+  exhaust the 30-cell grid reach the optimum, so replay gains are second-order.
+  Heterogeneous worlds (lasso_path) are where the policy actually matters.
+
+### Combined verdict
+
+- machinery: verified live end-to-end (online rollout, replay, beta sweep,
+  selection, redeploy, adaptive planning, artifacts, pointer JSON, tool dispatch)
+- discovery: circle_packing hits the published optimum exactly; lasso_path reaches
+  a 4.27x speedup over the reference solver
+- policy self-improvement: lasso_path +66.5% replay reward and 4.27x online
+  speedup after redeploy; circle_packing +0.02% then a stable plateau with
+  policy-driven plan adaptation
