@@ -7,7 +7,7 @@
 > native tool (`dream_rsi`, toolset `dream_rsi`).
 
 [![Python](https://img.shields.io/badge/python-3.10%2B-blue)](https://www.python.org)
-[![Tests](https://img.shields.io/badge/tests-39%20passing-brightgreen)](#tests)
+[![Tests](https://img.shields.io/badge/tests-40%20passing-brightgreen)](#tests)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 [![arXiv](https://img.shields.io/badge/arXiv-2609.14858-b31b1b)](https://arxiv.org/abs/2609.14858)
 [![Cost](https://img.shields.io/badge/agent%20back--ends-%240%20mode-success)](#agent-back-ends)
@@ -128,7 +128,7 @@ gated on the CLI + numpy being present.
 
 | spec | cost | notes |
 |---|---|---|
-| `gemini[:flash\|pro\|thinking\|lite]` | **$0** | drives the Gemini web CLI on browser cookies; verified live (4 attempts → 0.148204 optimum) |
+| `gemini[:flash\|pro\|thinking\|lite]` | **$0** | drives the Gemini web CLI on browser cookies; verified live (4 attempts → 0.148204 optimum). Chat replies are markdown, so the loader un-autolinks `[url](url)` and unescapes `\_` inside generated code |
 | `deepseek[:model]` | paid API | stronger code generation; streaming + retries + idle-timeout guard |
 | `dsh` | paid API | DeepSeek Harness headless; the agent edits files itself |
 | `openai:<base>\|<model>\|<keyfile>` | varies | any OpenAI-compatible endpoint |
@@ -218,7 +218,7 @@ class OptimalPolicy(LLMDesignedMethod):
 ## Tests
 
 ```bash
-PYTHONPATH=. python3 -m pytest tests -q     # 39 tests
+PYTHONPATH=. python3 -m pytest tests -q     # 40 tests
 ```
 
 Tree round-trip; replay legality (duplicates, parent+child, oversize, invented

@@ -280,6 +280,16 @@ def test_extract_files_drops_implausible_paths() -> None:
     assert extract_files("<<<FILE: ../../etc/passwd>>>\nx\n<<<END>>>") == {}
 
 
+def test_delink_repairs_markdown_mangled_urls() -> None:
+    from dream_rsi.agents import delink
+    body = 'u = "[https://x.com/a?b=1](https://x.com/a?b=1)"\nv = r"a\\_b"'
+    fixed = delink(body)
+    assert "[https" not in fixed and "https://x.com/a?b=1" in fixed
+    assert "\\_" not in fixed
+    keep = delink('see [docs](https://example.com) for more')
+    assert keep == "see [docs](https://example.com) for more"
+
+
 def test_mock_agent_emits_policy_for_improvement_prompt() -> None:
     agent = MockBackend(task="circle_packing")
     res = agent.complete("You are improving one **prefix-only exploration policy**.")

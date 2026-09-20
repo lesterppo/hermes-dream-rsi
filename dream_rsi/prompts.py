@@ -21,7 +21,9 @@ fences around a FILE block. A file you emit is written to disk exactly as-is, so
 never leave anything unfinished in it.
 
 Paths are relative to your working directory: write `solution.py` or `method.py`
-exactly, never an absolute path and never a nested directory."""
+exactly, never an absolute path and never a nested directory. String values are
+compared verbatim, so never wrap a URL in markdown link syntax and never escape
+underscores or asterisks inside code."""
 
 EXPLORATION_PROMPT = """You must read every historical proposal before proposing or implementing a new solution.
 

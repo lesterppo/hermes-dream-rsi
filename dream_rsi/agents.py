@@ -91,6 +91,30 @@ def _safe_rel_path(path: str) -> Optional[str]:
     return rel
 
 
+MD_LINK = re.compile(r"\[([^\]\n]{1,300})\]\((https?://[^)\s]+)\)")
+MD_ESCAPE = re.compile(r"\\([_*\[\]()#`~|])")
+
+
+def delink(body: str) -> str:
+    """Undo markdown autolinking that mangles URLs inside generated code.
+
+    Chat back-ends (notably Gemini's web UI) rewrite bare URLs into
+    ``[url](url)`` markdown, which corrupts string literals in the artefact even
+    though the code is otherwise correct.
+    """
+    if not body:
+        return body
+    def _fix(m):
+        label, url = m.group(1), m.group(2)
+        stripped = label.strip()
+        if stripped == url or stripped.rstrip("/") == url.rstrip("/") or \
+                stripped in url:
+            return url
+        return m.group(0)
+    out = MD_LINK.sub(_fix, body)
+    return MD_ESCAPE.sub(r"\1", out)
+
+
 def extract_files(text: str, default_name: Optional[str] = None,
                   expected_name: Optional[str] = None) -> Dict[str, str]:
     """Parse the <<<FILE: path>>> protocol; fall back to a single code fence.
@@ -106,15 +130,15 @@ def extract_files(text: str, default_name: Optional[str] = None,
     for m in FILE_BLOCK.finditer(text or ""):
         rel = _safe_rel_path(m.group("path"))
         if rel:
-            out[rel] = m.group("body").rstrip() + "\n"
+            out[rel] = delink(m.group("body")).rstrip() + "\n"
     if not out and expected_name:
         fences = FENCE.findall(text or "")
         if fences:
-            out[expected_name] = max(fences, key=len).rstrip() + "\n"
+            out[expected_name] = delink(max(fences, key=len)).rstrip() + "\n"
     if not out and default_name:
         fences = FENCE.findall(text or "")
         if fences:
-            out[default_name] = max(fences, key=len).rstrip() + "\n"
+            out[default_name] = delink(max(fences, key=len)).rstrip() + "\n"
     if expected_name:
         norm: Dict[str, str] = {}
         for rel, body in out.items():
